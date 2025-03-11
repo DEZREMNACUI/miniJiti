@@ -29,6 +29,15 @@ interface Module {
 }
 
 /**
+ * 检测当前是否运行在 Bun 环境中
+ */
+function isBun(): boolean {
+  return typeof process !== 'undefined' &&
+    typeof process.versions !== 'undefined' &&
+    typeof (process.versions as any).bun !== 'undefined';
+}
+
+/**
  * 创建一个 miniJiti 实例
  */
 function createJiti(
@@ -49,6 +58,26 @@ function createJiti(
 
   // 获取调用者的目录
   const callerDir = path.dirname(filename);
+
+  // 检查是否在 Bun 环境中运行
+  const runningInBun = isBun();
+  // 如果是 Bun 环境，可以使用 Bun 内置的加载机制
+  if (runningInBun) {
+    console.log('[miniJiti] 检测到 Bun 运行时环境，将使用 Bun 内置的 TypeScript/JSX 支持');
+    return function bunJitiFn(id: string): any {
+      // 解析模块路径
+      const resolvedPath = resolveModulePath(id, callerDir, jitiOptions.extensions || []);
+
+      if (!resolvedPath) {
+        throw new Error(`Cannot find module '${id}'`);
+      }
+
+      // 使用 Bun 的内置 require
+      // @ts-ignore - Bun 类型可能未定义
+      return require(resolvedPath);
+    };
+  }
+
 
   // 创建一个 require 函数
   const _require = createRequire(filename);
@@ -245,6 +274,12 @@ if (require.main === module) {
   }
 
   const filePath = path.resolve(process.cwd(), args[0]);
+
+  // 检测 Bun 环境并提供信息
+  if (isBun()) {
+    console.log('[miniJiti] 检测到 Bun 运行时环境，将使用 Bun 内置的 TypeScript/JSX 支持');
+  }
+
   const jiti = createJiti(__filename);
 
   try {
